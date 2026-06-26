@@ -1,0 +1,44 @@
+body {
+  margin: 0;
+  background: #111;
+  color: #eee;
+  font: 14px Arial, sans-serif;
+}
+
+main {
+  width: min(520px, calc(100vw - 32px));
+  margin: 32px auto;
+}
+
+h1 {
+  margin: 0 0 22px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.setting {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #555;
+  background: #181818;
+}
+
+.setting input {
+  margin-top: 2px;
+}
+
+.setting span {
+  display: grid;
+  gap: 4px;
+}
+
+.setting small {
+  color: #bbb;
+}
+
+#status {
+  min-height: 18px;
+  color: #c9ffc0;
+}

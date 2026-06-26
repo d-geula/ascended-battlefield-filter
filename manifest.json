@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Ascended Battlefield Filter",
+  "version": "0.1.0",
+  "description": "Adds client-side filters to the GateWars Ascended cosmos battlefield table.",
+  "permissions": ["storage"],
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://asc.gatewa.rs/battlefield.php*",
+        "https://asc.gatewa.rs/battlefieldE.php*",
+        "https://asc.gatewa.rs/spylog.php*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
