@@ -73,6 +73,73 @@
     return match ? Number(match[0]) : null;
   };
 
+  const parseIntegerString = (value) => {
+    const cleaned = normalize(value).replace(/,/g, "");
+    if (!cleaned || cleaned.includes("?")) return null;
+    const match = cleaned.match(/\d+/);
+    return match ? match[0].replace(/^0+(?=\d)/, "") : null;
+  };
+
+  const formatInteger = (value) => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  const addIntegerStrings = (left, right) => {
+    let carry = 0;
+    let result = "";
+    let leftIndex = left.length - 1;
+    let rightIndex = right.length - 1;
+
+    while (leftIndex >= 0 || rightIndex >= 0 || carry) {
+      const sum =
+        (leftIndex >= 0 ? Number(left[leftIndex--]) : 0) +
+        (rightIndex >= 0 ? Number(right[rightIndex--]) : 0) +
+        carry;
+      result = String(sum % 10) + result;
+      carry = Math.floor(sum / 10);
+    }
+
+    return result.replace(/^0+(?=\d)/, "");
+  };
+
+  const multiplyIntegerString = (value, multiplier) => {
+    let carry = 0;
+    let result = "";
+
+    for (let index = value.length - 1; index >= 0; index -= 1) {
+      const product = Number(value[index]) * multiplier + carry;
+      result = String(product % 10) + result;
+      carry = Math.floor(product / 10);
+    }
+
+    while (carry) {
+      result = String(carry % 10) + result;
+      carry = Math.floor(carry / 10);
+    }
+
+    return result.replace(/^0+(?=\d)/, "") || "0";
+  };
+
+  const divideIntegerString = (value, divisor) => {
+    let remainder = 0;
+    let quotient = "";
+
+    for (const digit of value) {
+      const current = remainder * 10 + Number(digit);
+      const quotientDigit = Math.floor(current / divisor);
+      quotient += String(quotientDigit);
+      remainder = current % divisor;
+    }
+
+    return {
+      quotient: quotient.replace(/^0+(?=\d)/, "") || "0",
+      remainder,
+    };
+  };
+
+  const roundedDivideIntegerString = (value, divisor) => {
+    const { quotient, remainder } = divideIntegerString(value, divisor);
+    return remainder * 2 >= divisor ? addIntegerStrings(quotient, "1") : quotient;
+  };
+
   const decodeBase64Url = (value) => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     const normalized = value.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
@@ -94,8 +161,7 @@
     return output;
   };
 
-  const parseImageNumber = (cell) => {
-    const image = cell?.querySelector("img.numimg[src*='im.php?t=']");
+  const parseImageValue = (image) => {
     if (!image) return null;
 
     try {
@@ -104,10 +170,18 @@
       if (!token) return null;
 
       const payload = JSON.parse(decodeBase64Url(token));
-      return payload.v && /^\d+$/.test(String(payload.v)) ? Number(payload.v) : null;
+      return payload.v && /^\d+$/.test(String(payload.v)) ? String(payload.v) : null;
     } catch (error) {
       return null;
     }
+  };
+
+  const parseImageNumber = (cell) => {
+    const image = cell?.querySelector("img.numimg[src*='im.php?t=']");
+    if (!image) return null;
+
+    const value = parseImageValue(image);
+    return value === null ? null : Number(value);
   };
 
   const parseCellNumber = (cell) => parseNumber(getCellText(cell)) ?? parseImageNumber(cell);
@@ -307,30 +381,130 @@
         white-space: nowrap;
       }
       .abf-deimageified-number {
+        display: inline-flex;
+        align-items: center;
         color: #ddd;
         font: inherit;
-        vertical-align: middle;
+        line-height: 1;
+        vertical-align: text-top;
         user-select: text;
+      }
+      .abf-spylog-income {
+        display: inline-flex;
+        align-items: center;
+        gap: 26px;
+        margin-left: 28px;
+        font-weight: bold;
+        line-height: 1;
+        vertical-align: text-top;
+      }
+      .abf-spylog-income span {
+        white-space: nowrap;
       }
     `;
     document.head.append(style);
   };
 
-  const findSpylogIdImage = () =>
-    [...document.querySelectorAll("img.numimg[src*='im.php?t=']")].find((image) =>
-      getCellText(image.closest("td")).includes("Main Realm Identification Number:")
+  const deImageifyNumberImages = () => {
+    let count = 0;
+    document.querySelectorAll("img.numimg[src*='im.php?t=']").forEach((image) => {
+      const value = parseImageValue(image);
+      if (value === null) return;
+
+      const text = document.createElement("span");
+      text.className = "abf-deimageified-number";
+      text.textContent = formatInteger(value);
+      image.replaceWith(text);
+      count += 1;
+    });
+
+    return count > 0;
+  };
+
+  const deImageifyBattlefieldResources = (table) => {
+    let count = 0;
+    table.querySelectorAll("tr").forEach((row) => {
+      const resourceCell = row.cells?.[5];
+      if (!resourceCell) return;
+
+      resourceCell.querySelectorAll("img.numimg[src*='im.php?t=']").forEach((image) => {
+        const value = parseImageValue(image);
+        if (value === null) return;
+
+        const text = document.createElement("span");
+        text.className = "abf-deimageified-number";
+        text.textContent = formatInteger(value);
+        image.replaceWith(text);
+        count += 1;
+      });
+    });
+
+    return count > 0;
+  };
+
+  const findSpylogValue = (label) => {
+    const wanted = normalize(label).toLowerCase();
+    for (const row of document.querySelectorAll("tr")) {
+      const cells = [...row.cells];
+      const labelIndex = cells.findIndex((cell) =>
+        normalize(cell.textContent).toLowerCase().replace(/:$/, "") === wanted
+      );
+      if (labelIndex === -1 || labelIndex + 1 >= cells.length) continue;
+
+      const value = parseIntegerString(cells[labelIndex + 1].textContent);
+      if (value !== null) return value;
+    }
+    return null;
+  };
+
+  const calculateSpylogIncome = () => {
+    const unvisitedPlanets = findSpylogValue("Undeveloped Planets");
+    const incomePlanetLabels = ["Resource", "Labour", "Guided", "Worshipping"];
+    const resourcePlanets = incomePlanetLabels.map(findSpylogValue).find((value) => value !== null);
+    const production = findSpylogValue("Production");
+
+    if (unvisitedPlanets === null || resourcePlanets === null || production === null) {
+      return null;
+    }
+
+    const productionNumber = Number(production);
+    if (!Number.isSafeInteger(productionNumber)) return null;
+
+    const base = addIntegerStrings(unvisitedPlanets, multiplyIntegerString(resourcePlanets, 25));
+    const productionMultiplier = 100 + productionNumber;
+    const numerator = multiplyIntegerString(
+      multiplyIntegerString(base, productionMultiplier),
+      productionMultiplier
     );
+    const incomePerTurn = roundedDivideIntegerString(numerator, 10000);
 
-  const deImageifySpylog = () => {
-    const image = findSpylogIdImage();
-    const id = parseImageNumber(image?.closest("td"));
-    if (!image || id === null) return false;
+    return {
+      incomePerTurn,
+      incomePerDay: multiplyIntegerString(incomePerTurn, 48),
+    };
+  };
 
-    const text = document.createElement("span");
-    text.className = "abf-deimageified-number";
-    text.textContent = String(id);
-    image.replaceWith(text);
-    return true;
+  const addSpylogIncome = () => {
+    if (document.querySelector(".abf-spylog-income")) return;
+
+    const resourcesRow = [...document.querySelectorAll("tr")].find((row) =>
+      normalize(row.textContent).startsWith("Resources:")
+    );
+    const target = resourcesRow?.cells?.[0];
+    if (!target) return;
+
+    const income = calculateSpylogIncome();
+    const incomePerTurn = income ? formatInteger(income.incomePerTurn) : "N/A";
+    const incomePerDay = income ? formatInteger(income.incomePerDay) : "N/A";
+
+    const wrapper = document.createElement("span");
+    wrapper.className = "abf-spylog-income";
+    wrapper.innerHTML = `
+      <span>Income / turn: ${incomePerTurn}</span>
+      <span>Income / day: ${incomePerDay}</span>
+    `;
+
+    target.append(wrapper);
   };
 
   const buildPanel = (table) => {
@@ -380,7 +554,8 @@
   injectStyles();
 
   if (location.pathname.endsWith("/spylog.php")) {
-    if (settings.deImageify) deImageifySpylog();
+    if (settings.deImageify) deImageifyNumberImages();
+    addSpylogIncome();
     return;
   }
 
@@ -388,6 +563,7 @@
   if (!table || document.getElementById("abf-panel")) return;
 
   rows = getRows(table);
+  if (settings.deImageify) deImageifyBattlefieldResources(table);
   window.ascBattlefieldFilter = {
     get rows() {
       return rows.map(({ element, ...row }) => row);
