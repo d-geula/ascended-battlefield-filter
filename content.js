@@ -82,6 +82,13 @@
 
   const formatInteger = (value) => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
+  const shouldKeepRawSpylogValue = (image) => {
+    if (!location.pathname.endsWith("/spylog.php")) return false;
+
+    const rowText = normalize(image.closest("tr")?.textContent).toLowerCase();
+    return rowText.includes("main realm identification number");
+  };
+
   const addIntegerStrings = (left, right) => {
     let carry = 0;
     let result = "";
@@ -413,7 +420,7 @@
 
       const text = document.createElement("span");
       text.className = "abf-deimageified-number";
-      text.textContent = formatInteger(value);
+      text.textContent = shouldKeepRawSpylogValue(image) ? value : formatInteger(value);
       image.replaceWith(text);
       count += 1;
     });
